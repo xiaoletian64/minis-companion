@@ -16,7 +16,8 @@ cd "$W"
 sed -i "s|@AUTH_USER@|$AUSER|; s|@AUTH_PASS@|$APASS|" java/site/zhangyue/miniscompanion/MainActivity.java
 mkdir -p classes dexout gen
 find java -name '*.java' > srcs.txt
-javac -encoding UTF-8 -source 8 -target 8 -nowarn -bootclasspath "$PLATFORM" -d classes @srcs.txt 2>&1 | grep -v warning || true
+javac -encoding UTF-8 -source 8 -target 8 -nowarn \
+  -bootclasspath "$PLATFORM:$BT/core-lambda-stubs.jar" -d classes @srcs.txt 2>&1 | grep -v "warning\|deprecat" || true
 "$BT/d8" --release --lib "$PLATFORM" --min-api 24 --output dexout $(find classes -name '*.class')
 "$BT/aapt2" compile --dir res -o res.zip
 "$BT/aapt2" link -o base.apk -I "$PLATFORM" --manifest AndroidManifest.xml res.zip --java gen
