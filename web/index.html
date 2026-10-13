@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>Minis 会话镜像</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--ink:#1c1e21;--sub:#65676b;--line:#e4e6eb;--me:#0084ff;--bot:#e4e6eb;--mono:ui-monospace,Menlo,Consolas,monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:15px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans SC",sans-serif;background:var(--bg);color:var(--ink)}
+header{position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--line);padding:12px 14px;z-index:10}
+header h1{font-size:17px}
+header .meta{font-size:12px;color:var(--sub);margin-top:2px}
+#q{width:100%;margin-top:8px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:15px;background:var(--bg)}
+main{max-width:760px;margin:0 auto;padding:10px 12px 60px}
+.list-item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin:8px 0;cursor:pointer}
+.list-item:active{background:#eef1f5}
+.li-title{font-weight:600;font-size:15px;display:flex;justify-content:space-between;gap:8px}
+.li-title .n{flex:none;color:var(--sub);font-weight:400;font-size:12px}
+.li-prev{color:var(--sub);font-size:13px;margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.li-time{color:var(--sub);font-size:12px;margin-top:3px}
+.back{display:inline-block;margin:6px 0;color:var(--me);font-size:15px;cursor:pointer}
+.msg{margin:14px 0;display:flex;flex-direction:column}
+.msg.user{align-items:flex-end}
+.bubble{max-width:88%;padding:9px 13px;border-radius:16px;background:var(--card);border:1px solid var(--line);white-space:pre-wrap;word-break:break-word}
+.msg.user .bubble{background:var(--me);color:#fff;border-color:var(--me)}
+.msg.assistant .bubble{background:var(--bot)}
+.msg .at{font-size:11px;color:var(--sub);margin-top:3px}
+.calls{max-width:95%;margin-top:6px;width:100%}
+.call{border:1px solid var(--line);border-radius:10px;background:var(--card);margin:5px 0;font-size:12px;overflow:hidden}
+.call summary{padding:7px 10px;cursor:pointer;color:var(--sub);font-family:var(--mono);list-style:none;display:flex;gap:6px;align-items:center}
+.call summary::before{content:"▸";transition:.15s}
+.call[open] summary::before{transform:rotate(90deg)}
+.call .bd{padding:0 10px 8px;border-top:1px solid var(--line)}
+.call .lbl{color:var(--sub);margin:6px 0 2px}
+.call pre{font-family:var(--mono);font-size:11px;white-space:pre-wrap;word-break:break-all;background:#f7f8fa;padding:6px;border-radius:8px;max-height:300px;overflow:auto}
+.call .fail{color:#d93025}
+#load{text-align:center;color:var(--sub);padding:40px 0}
+.empty{text-align:center;color:var(--sub);padding:40px 0}
+</style>
+</head>
+<body>
+<header>
+  <div style="display:flex;justify-content:space-between;align-items:baseline">
+    <h1 id="hd">Minis 会话镜像</h1>
+    <a href="/" style="font-size:13px">← 中心</a>
+  </div>
+  <div class="meta" id="gen"></div>
+  <input id="q" type="search" placeholder="搜索标题 / 摘要关键词…" style="display:none">
+</header>
+<main id="app"><div id="load">加载中…</div></main>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => (s||"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let INDEX = null;
+
+// Fetch JSON first; in restricted contexts (minis:// viewer, where fetch()
+// is unavailable) fall back to <script> injection of the .js twin.
+function loadScript(src){
+  return new Promise((res, rej) => {
+    const el = document.createElement("script");
+    el.src = src; el.onload = res; el.onerror = () => rej(new Error("load " + src));
+    document.head.appendChild(el);
+  });
+}
+async function loadData(jsonPath, jsPath, gname){
+  try {
+    const r = await fetch(jsonPath, {cache:"no-store"});
+    if(r.ok) return await r.json();
+  } catch(e) { /* fall through */ }
+  window[gname] = null;
+  await loadScript(jsPath);
+  if(!window[gname]) throw new Error("no data (" + gname + ")");
+  return window[gname];
+}
+
+async function loadIndex(){
+  INDEX = await loadData("./data/index.json", "./data/index.js", "MIRROR_INDEX");
+  $("#gen").textContent = `共 ${INDEX.count} 个会话 · 同步于 ${INDEX.generated_at}`;
+  $("#q").style.display = "";
+  renderList("");
+}
+
+function renderList(kw){
+  const k = kw.trim().toLowerCase();
+  const app = $("#app");
+  const items = INDEX.sessions.filter(s =>
+    !k || (s.title||"").toLowerCase().includes(k) || (s.preview||"").toLowerCase().includes(k));
+  if(!items.length){ app.innerHTML = `<div class="empty">没有匹配「${esc(kw)}」的会话</div>`; return; }
+  app.innerHTML = items.map(s => `
+    <div class="list-item" onclick="openSession('${s.id}')">
+      <div class="li-title"><span>${esc(s.title||"(无标题)")}</span><span class="n">${s.count||0}条</span></div>
+      <div class="li-prev">${esc(s.preview)}</div>
+      <div class="li-time">开始 ${s.started_at||""} · 最近 ${s.last_active||""}</div>
+    </div>`).join("");
+}
+
+async function openSession(id){
+  $("#app").innerHTML = `<div id="load">加载会话…</div>`;
+  $("#q").style.display = "none";
+  const doc = await loadData(`./sessions/${id}.json`, `./sessions/${id}.js`, "MIRROR_SESSION");
+  $("#hd").textContent = doc.title || "(无标题)";
+  let html = `<span class="back" id="bk">‹ 返回列表</span>`;
+  for(const m of doc.messages){
+    const role = m.role === "user" ? "user" : "assistant";
+    let calls = "";
+    if(m.calls && m.calls.length){
+      calls = `<div class="calls">` + m.calls.map(c => `
+        <details class="call"><summary>${esc(c.name)} ${c.ok ? "" : '<span class="fail">✗失败</span>'}</summary>
+        <div class="bd">
+          <div class="lbl">输入</div><pre>${esc(c.input)}</pre>
+          ${c.output ? `<div class="lbl">输出</div><pre>${esc(c.output)}</pre>` : ""}
+        </div></details>`).join("") + `</div>`;
+    }
+    html += `<div class="msg ${role}"><div class="bubble">${esc(m.text)||"<i style='opacity:.5'>(无文字，仅工具调用)</i>"}</div>${calls}<span class="at">${m.at||""}</span></div>`;
+  }
+  $("#app").innerHTML = html;
+  $("#bk").addEventListener("click", () => {
+    $("#hd").textContent = "Minis 会话镜像";
+    $("#q").style.display = "";
+    renderList($("#q").value);
+    window.scrollTo(0,0);
+  });
+  window.scrollTo(0,0);
+}
+
+$("#q").addEventListener("input", e => renderList(e.target.value));
+loadIndex().catch(e => $("#app").innerHTML = `<div class="empty">加载失败：${esc(e.message)}</div>`);
+</script>
+</body>
+</html>

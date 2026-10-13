@@ -1,0 +1,21 @@
+# Build artifacts
+*.apk
+*.aab
+.gradle/
+build/
+local.properties
+
+# Python
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local secrets
+.env
+secrets/

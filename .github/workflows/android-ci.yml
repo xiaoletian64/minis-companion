@@ -1,0 +1,33 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android-ci.yml']
+  pull_request:
+    paths: ['android/**', '.github/workflows/android-ci.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Build (assembleDebug if project ready)
+        working-directory: android
+        run: |
+          if [ -f gradlew ]; then
+            ./gradlew :app:assembleDebug --no-daemon
+          else
+            echo "gradle project not scaffolded yet — placeholder"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: hashFiles('android/app/build/outputs/apk/debug/*.apk') != ''
+        with:
+          name: minis-companion-debug
+          path: android/app/build/outputs/apk/debug/*.apk
