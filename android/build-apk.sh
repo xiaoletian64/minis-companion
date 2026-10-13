@@ -1,7 +1,7 @@
 #!/bin/sh
 # build-apk.sh — no-gradle APK build for minis-companion (runs on a Linux box
 # with: JDK(javac+keytool), /opt/android-sdk-lite (build-tools 34 + android-34
-# platform), zip). Usage: build-apk.sh <src-dir> <out.apk> <auth-user> <auth-pass>
+# platform), zip). Usage: build-apk.sh <src-dir> <out.apk> <auth-user> <auth-pass> <pin>
 set -e
 SRC="$1"; OUT="$2"; AUSER="$3"; APASS="$4"; APIN="$5"
 [ -n "$APIN" ] || { echo "usage: build-apk.sh <src-dir> <out.apk> <user> <pass> <pin>"; exit 1; }
@@ -13,7 +13,10 @@ PLATFORM=$(ls $SDK/platforms/*/android.jar | head -1)
 W=$(mktemp -d)
 cp -r "$SRC/app/src/main/." "$W/"
 cd "$W"
-sed -i "s|@AUTH_USER@|$AUSER|; s|@AUTH_PASS@|$APASS|" java/site/zhangyue/miniscompanion/MainActivity.java
+sed -i "s|@AUTH_USER@|$AUSER|; s|@AUTH_PASS@|$APASS|; s|@PIN_SHA256@|$PIN_SHA|" java/site/zhangyue/miniscompanion/MainActivity.java
+if grep -q "@AUTH_\|@PIN_" java/site/zhangyue/miniscompanion/MainActivity.java; then
+  echo "FATAL: placeholders not replaced"; grep -n "@AUTH_\|@PIN_" java/site/zhangyue/miniscompanion/MainActivity.java; exit 1
+fi
 mkdir -p classes dexout gen
 find java -name '*.java' > srcs.txt
 javac -encoding UTF-8 -source 8 -target 8 -nowarn \
