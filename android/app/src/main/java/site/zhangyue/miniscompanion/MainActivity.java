@@ -51,6 +51,7 @@ public class MainActivity extends Activity {
 
     private static final int REQ_FOLDER = 41;
     private static final int REQ_INSTALL_PKG = 42;
+    private static final int REQ_FILE = 43;
 
     private WebView web;
     private boolean unlocked = false;
@@ -191,6 +192,17 @@ public class MainActivity extends Activity {
                 show("已开启自动同步");
                 scanAndUpload();
             } catch (Exception e) { show("授权失败: " + e.getMessage()); }
+        } else if (req == REQ_FILE && res == RESULT_OK && data != null) {
+            final Uri f = data.getData();
+            new Thread(() -> {
+                String name = queryName(f);
+                if (!name.toLowerCase().endsWith(".minisbak")) {
+                    show("这不是 .minisbak 备份包: " + name);
+                    return;
+                }
+                if (httpPutStream(f, name)) show("已上传: " + name + "（2分钟内自动合并）");
+                else show("上传失败: " + name);
+            }).start();
         }
     }
 
@@ -309,19 +321,24 @@ public class MainActivity extends Activity {
         String saved = getPreferences(MODE_PRIVATE).getString("backup_tree", null);
         if (saved != null) { scanAndUpload(); return; }
         new AlertDialog.Builder(this)
-                .setTitle("开启备份自动同步")
+                .setTitle("上传备份包到服务器")
                 .setMessage(
-                    "授权哪个文件夹？—— 就选 Minis 备份包保存的那个文件夹。\n\n" +
-                    "第一次配置（两步）：\n" +
-                    "1. 打开 Minis → 设置 → 备份与恢复 → 添加「本地文件夹」目的地，\n" +
-                    "   新建一个如 下载/MinisBackup 的文件夹并选中它；\n" +
-                    "2. 回到本 App 点「选择文件夹」，选同一个文件夹。\n\n" +
-                    "之后 Minis 每次导出备份包，会自动上传到服务器合并，无需再操作。")
-                .setPositiveButton("选择文件夹", (d, w) -> {
+                    "怎么选？取决于 Minis 备份包在哪：\n\n" +
+                    "① 选文件夹（推荐）：如果 Minis 设置→备份与恢复 里添加了「本地文件夹」" +
+                    "目的地（如 下载/MinisBackup），选同一个文件夹，以后每次导出自动上传。\n\n" +
+                    "② 选单个文件：直接浏览选中 .minisbak 备份包，传完即合并（一次性）。\n\n" +
+                    "两个都能用，随时可以换。")
+                .setPositiveButton("选文件夹", (d, w) -> {
                     Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
                     i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
                             | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
                     startActivityForResult(i, REQ_FOLDER);
+                })
+                .setNeutralButton("选单个文件", (d, w) -> {
+                    Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    i.setType("*/*");
+                    startActivityForResult(i, REQ_FILE);
                 })
                 .setNegativeButton("取消", null)
                 .show();
@@ -398,6 +415,17 @@ public class MainActivity extends Activity {
             return conn.getResponseCode() < 300;
         } catch (Exception e) { return false; }
         finally { if (conn != null) conn.disconnect(); }
+    }
+
+    private String queryName(Uri u) {
+        android.database.Cursor c = getContentResolver().query(u, null, null, null, null);
+        String n = "backup.minisbak";
+        if (c != null) {
+            if (c.moveToFirst()) n = c.getString(c.getColumnIndex(
+                    android.provider.OpenableColumns.DISPLAY_NAME));
+            c.close();
+        }
+        return n;
     }
 
     private long querySize(Uri u) {
