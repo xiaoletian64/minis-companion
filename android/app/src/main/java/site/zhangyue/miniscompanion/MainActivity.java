@@ -219,6 +219,15 @@ public class MainActivity extends Activity {
         title.setTextColor(Color.parseColor("#F4EDDD"));
         title.setTextSize(22);
         title.setGravity(Gravity.CENTER);
+        String vn;
+        try { vn = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
+        catch (Exception e) { vn = "?"; }
+        TextView ver = new TextView(this);
+        ver.setText("v" + vn);
+        ver.setTextColor(Color.parseColor("#5A7076"));
+        ver.setTextSize(12);
+        ver.setGravity(Gravity.CENTER);
+        ver.setPadding(0, dp(2), 0, 0);
         TextView sub = new TextView(this);
         sub.setText("输入访问密码");
         sub.setTextColor(Color.parseColor("#95AAAC"));
@@ -252,7 +261,7 @@ public class MainActivity extends Activity {
         cp.topMargin = dp(10);
         check.setOnClickListener(v -> checkOta(true));
 
-        box.addView(title); box.addView(sub); box.addView(pin); box.addView(go, bp);
+        box.addView(title); box.addView(ver); box.addView(sub); box.addView(pin); box.addView(go, bp);
         box.addView(check, cp);
         setContentView(box);
         go.setOnClickListener(v -> tryUnlock(pin));
@@ -288,6 +297,7 @@ public class MainActivity extends Activity {
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        web.addJavascriptInterface(new Bridge(), "AndroidBridge");
         FrameLayout fl = new FrameLayout(this);
         fl.addView(web, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
@@ -442,6 +452,28 @@ public class MainActivity extends Activity {
 
     private int dp(int v) {
         return Math.round(v * getResources().getDisplayMetrics().density);
+    }
+
+    /** JS bridge: lets the mirror page trigger native actions (OTA, upload). */
+    private class Bridge {
+        @android.webkit.JavascriptInterface
+        public String version() {
+            try {
+                return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            } catch (Exception e) { return "?"; }
+        }
+        @android.webkit.JavascriptInterface
+        public void checkUpdate() {
+            runOnUiThread(() -> checkOta(true));
+        }
+        @android.webkit.JavascriptInterface
+        public void uploadBackup() {
+            runOnUiThread(() -> onSyncClicked());
+        }
+        @android.webkit.JavascriptInterface
+        public void toast(final String msg) {
+            runOnUiThread(() -> show(msg));
+        }
     }
 
     @Override public void onBackPressed() {
