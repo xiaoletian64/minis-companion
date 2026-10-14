@@ -174,8 +174,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,
-                WindowManager.LayoutParams.FLAG_SECURE);
+        // FLAG_SECURE removed in 0.5.1 — screenshots allowed (user request).
         checkOta(false);            // OTA before the gate — self-heal even if PIN breaks
         if (!unlocked) showGate(); else initWeb();
     }
@@ -333,11 +332,12 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this)
                 .setTitle("上传备份包到服务器")
                 .setMessage(
-                    "怎么选？取决于 Minis 备份包在哪：\n\n" +
-                    "① 选文件夹（推荐）：如果 Minis 设置→备份与恢复 里添加了「本地文件夹」" +
-                    "目的地（如 下载/MinisBackup），选同一个文件夹，以后每次导出自动上传。\n\n" +
-                    "② 选单个文件：直接浏览选中 .minisbak 备份包，传完即合并（一次性）。\n\n" +
-                    "两个都能用，随时可以换。")
+                    "找不到文件？多半是 Minis 备份包还留在 Minis 内部（没设目的地）。\n\n" +
+                    "正确流程（Minis → 设置 → 备份与恢复）：\n" +
+                    "1. 添加目的地 → 选「本地文件夹」→ 新建 下载/MinisBackup 选中；\n" +
+                    "2. 点「创建备份」→ 完成后包会出现在 下载/MinisBackup/ 里；\n" +
+                    "3. 回这里点「选文件夹」选 下载/MinisBackup（或「选单个文件」选那个包）。\n\n" +
+                    "也可以用系统文件管理器确认包在哪（搜 .minisbak）。")
                 .setPositiveButton("选文件夹", (d, w) -> {
                     Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
                     i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
