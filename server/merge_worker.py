@@ -156,28 +156,45 @@ def merge_package(pkg_path, device):
     save_index(idx)
     return ns, nm
 
+def iter_incoming():
+    """Yield candidate package paths: legacy sessions-upload/ + WebDAV tree."""
+    for fn in sorted(os.listdir(INCOMING)):
+        p = os.path.join(INCOMING, fn)
+        if os.path.isfile(p):
+            yield p
+    dav_root = os.path.join(ROOT, "dav")
+    for dirpath, _dirs, files in os.walk(dav_root):
+        if "/.processed" in dirpath:
+            continue
+        for fn in sorted(files):
+            if fn.endswith((".minisbak", ".zip")):
+                yield os.path.join(dirpath, fn)
+
 def process_incoming():
     os.makedirs(PROCESSED, exist_ok=True)
     total = []
-    for fn in sorted(os.listdir(INCOMING)):
-        p = os.path.join(INCOMING, fn)
-        if not os.path.isfile(p): continue
+    for p in list(iter_incoming()):
+        fn = os.path.basename(p)
         low = fn.lower()
         stamp = time.strftime("%Y%m%d-%H%M%S")
-        dst = os.path.join(PROCESSED, f"{stamp}-{fn}")
+        in_dav = "/dav/" in p.replace(os.sep, "/")
+        dst = p + ".merged" if in_dav else os.path.join(PROCESSED, f"{stamp}-{fn}")
         try:
             if low.endswith((".minisbak", ".zip")):
                 dev = re.sub(r"[^a-z0-9]+", "-", low.split(".")[0])[:24] or "device"
                 ns, nm = merge_package(p, dev)
                 total.append(f"{fn}: +{ns} sessions/+{nm} msgs")
             elif low.endswith(".json"):
-                os.rename(p, dst)
+                os.rename(p, dst) if not in_dav else None
                 total.append(f"{fn}: json passthrough (manual merge TODO)")
                 continue
             else:
-                os.remove(p)
-                total.append(f"{fn}: unknown, removed")
-                continue
+                if not in_dav:
+                    os.remove(p)
+                    total.append(f"{fn}: unknown, removed")
+                    continue
+                else:
+                    continue  # leave non-package files in the dav tree alone
         except Exception as e:
             total.append(f"{fn}: ERROR {e}")
             continue
